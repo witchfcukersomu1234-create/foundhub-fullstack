@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Found-Hub - Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+body {
+  background: radial-gradient(circle at top, #1b1b1b, #0f0f0f);
+}
+
+.card-glass {
+  background: rgba(26, 26, 26, 0.85);
+  border: 1px solid #2a2a2a;
+}
+
+.item-box {
+  background: #141414;
+  border: 1px solid #2a2a2a;
+}
+
+.dashboard-title {
+  background: linear-gradient(90deg, #FFD700, #FFA500);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+</style>
+</head>
+
+<body class="text-gray-100 min-h-screen flex flex-col">
+
+<header class="bg-[#121212] py-4 px-6">
+<div class="container mx-auto flex justify-between">
+<a href="index.html" class="text-2xl font-bold">Found-Hub</a>
+<a href="#" onclick="logout()" class="text-sm text-red-400">Logout</a>
+</div>
+</header>
+
+<main class="container mx-auto flex-1 py-10 px-4 space-y-10">
+
+<div class="text-center">
+<h1 class="text-4xl font-bold dashboard-title">Your Dashboard</h1>
+<p class="text-gray-400 mt-3 text-sm">Manage your items and claims.</p>
+</div>
+
+<div class="grid md:grid-cols-3 gap-6">
+
+<section class="card-glass rounded-lg p-5">
+<h2 class="text-lg font-semibold text-orange-400 mb-4">My Posted Items</h2>
+<div id="myItems" class="space-y-3 text-sm"></div>
+</section>
+
+<section class="card-glass rounded-lg p-5">
+<h2 class="text-lg font-semibold text-orange-400 mb-4">Incoming Claims</h2>
+<div id="incomingClaims" class="space-y-3 text-sm"></div>
+</section>
+
+<section class="card-glass rounded-lg p-5">
+<h2 class="text-lg font-semibold text-orange-400 mb-4">My Submitted Claims</h2>
+<div id="myClaims" class="space-y-3 text-sm"></div>
+</section>
+
+</div>
+</main>
+
+<footer class="bg-[#121212] text-gray-500 text-center py-4 text-sm">
+© 2025 Found-Hub
+</footer>
+
+<script>
+const API = "http://localhost:4000";
+
+function token() {
+  return localStorage.getItem('fh_token');
+}
+
+function authHeader() {
+  return { 'Authorization': 'Bearer ' + token() };
+}
+
+function logout(){
+  localStorage.removeItem('fh_token');
+  location.href = "login-signup.html";
+}
+
+if(!token()){
+  location.href = "login-signup.html";
+}
+
+function renderEmpty(box, message){
+  box.innerHTML = `<p class="text-gray-400">${message}</p>`;
+}
+
+function renderItemBox(content){
+  return `<div class="item-box rounded p-3">${content}</div>`;
+}
+
+/* ===================== MY ITEMS ===================== */
+
+async function loadMyItems() {
+  const res = await fetch(API + '/api/my/items', { headers: authHeader() });
+  const items = await res.json();
+  const box = document.getElementById('myItems');
+
+  if (!items.length) {
+    renderEmpty(box, "No items posted.");
+    return;
+  }
+
+  box.innerHTML = items.map(i =>
+    renderItemBox(`
+      <div class="font-semibold">${i.title}</div>
+      <div class="text-xs text-gray-400 mt-1">
+        ${i.type.toUpperCase()} • ${i.location || ''}
+      </div>
+      <div class="text-xs mt-1 text-gray-400">Status: ${i.status}</div>
+
+      <div class="flex gap-2 mt-3">
+        <button onclick="editItem(${i.id})" 
+          class="px-2 py-1 bg-blue-600 text-xs rounded">Edit</button>
+        <button onclick="deleteItem(${i.id})" 
+          class="px-2 py-1 bg-red-600 text-xs rounded">Delete</button>
+      </div>
+    `)
+  ).join('');
+}
+
+async function editItem(id){
+  const title = prompt("New title:");
+  if(!title) return;
+
+  await fetch(`${API}/api/items/${id}`,{
+    method:'PATCH',
+    headers:{'Content-Type':'application/json', ...authHeader()},
+    body:JSON.stringify({title})
+  });
+
+  loadMyItems();
+}
+
+async function deleteItem(id){
+  if(!confirm("Delete item?")) return;
+
+  await fetch(`${API}/api/items/${id}`,{
+    method:'DELETE',
+    headers:authHeader()
+  });
+
+  loadMyItems();
+  loadIncomingClaims();
+}
+
+/* ===================== INCOMING CLAIMS ===================== */
+
+async function loadIncomingClaims() {
+  const res = await fetch(API + '/api/incoming/claims', { headers: authHeader() });
+  const claims = await res.json();
+  const box = document.getElementById('incomingClaims');
+
+  if (!claims.length) {
+    renderEmpty(box, "No incoming claims.");
+    return;
+  }
+
+  box.innerHTML = claims.map(c =>
+    renderItemBox(`
+      <div class="font-semibold">${c.title}</div>
+      <div class="text-xs text-gray-400 mt-1">By: ${c.claimer_name}</div>
+      <div class="text-sm mt-2"><b>Proof:</b> ${c.message}</div>
+      <div class="text-xs mt-1 text-gray-400">Status: ${c.status}</div>
+
+      ${c.status === 'pending' ? `
+      <div class="flex gap-2 mt-3">
+        <button onclick="decide(${c.id},'approved')" 
+          class="px-2 py-1 bg-green-600 text-xs rounded">Approve</button>
+        <button onclick="decide(${c.id},'rejected')" 
+          class="px-2 py-1 bg-red-600 text-xs rounded">Reject</button>
+      </div>` : ''}
+    `)
+  ).join('');
+}
+
+async function decide(id, decision){
+  await fetch(`${API}/api/claims/${id}/decision`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json', ...authHeader()},
+    body:JSON.stringify({decision})
+  });
+
+  loadIncomingClaims();
+  loadMyItems();
+}
+
+/* ===================== MY CLAIMS ===================== */
+
+async function loadMyClaims() {
+  const res = await fetch(API + '/api/my/claims', { headers: authHeader() });
+  const claims = await res.json();
+  const box = document.getElementById('myClaims');
+
+  if (!claims.length) {
+    renderEmpty(box, "No claims submitted.");
+    return;
+  }
+
+  box.innerHTML = claims.map(c =>
+    renderItemBox(`
+      <div class="font-semibold">${c.title}</div>
+      <div class="text-sm mt-2"><b>Your Proof:</b> ${c.message}</div>
+      <div class="text-xs mt-1 text-gray-400">Status: ${c.status}</div>
+    `)
+  ).join('');
+}
+
+loadMyItems();
+loadIncomingClaims();
+loadMyClaims();
+</script>
+
+</body>
+</html>

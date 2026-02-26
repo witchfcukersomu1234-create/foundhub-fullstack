@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" class="font-sans">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Found-Hub - Lost Items</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body style="background-color:#1A1A1A" class="flex flex-col min-h-screen">
+
+<!-- HEADER -->
+<header style="background-color:#121212;color:#F5F5F5;padding:1rem 2rem;">
+  <div class="container mx-auto flex justify-between items-center">
+    <a href="index.html" class="text-2xl font-bold">Found-Hub</a>
+    <div class="hidden md:flex items-center space-x-6">
+      <a href="index.html" style="color:#CCC" class="hover:text-white transition-colors">Home</a>
+      <a href="about.html" style="color:#CCC" class="hover:text-white transition-colors">About Me</a>
+      <a href="lost-items.html" style="color:#CCC" class="hover:text-white transition-colors font-bold !text-white">Lost Items</a>
+      <a href="found-items.html" style="color:#CCC" class="hover:text-white transition-colors">Found Items</a>
+      <a href="login-signup.html" style="color:#CCC" class="hover:text-white transition-colors">Login/Sign-Up</a>
+      <a href="dashboard.html" style="color:#CCC" class="hover:text-white transition-colors">Dashboard</a>
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="text-center flex flex-col items-center justify-center min-h-[50vh] p-8"
+         style="background-image:linear-gradient(rgba(0,0,0,.4),rgba(0,0,0,.4)),url('campus.avif');background-size:cover;background-position:center;">
+  <h2 class="text-4xl md:text-6xl font-bold" style="color:#FFD700;">Report Lost Item</h2>
+  <p class="mt-4 text-lg md:text-xl max-w-2xl" style="color:#FFA500;">
+    Describe your lost item and where you last saw it.
+  </p>
+</section>
+
+<!-- MAIN -->
+<main class="container mx-auto py-10 px-6 grid md:grid-cols-2 gap-6">
+
+  <!-- Form -->
+  <section class="p-6 rounded-lg" style="background-color:#262626;">
+    <h3 class="text-2xl font-bold mb-6" style="color:#F5F5F5;">Submit details</h3>
+
+    <form id="lostForm" class="space-y-4" onsubmit="return postLost(event)">
+      <div>
+        <label class="block text-sm mb-1" style="color:#CCC;">Item Title</label>
+        <input id="lostTitle" required class="w-full rounded-md p-2 text-sm"
+               placeholder="Example: Wallet, Phone, ID Card"
+               style="background:#1A1A1A;color:#F5F5F5;border:1px solid #262626;">
+      </div>
+
+      <div>
+        <label class="block text-sm mb-1" style="color:#CCC;">Last Seen Location</label>
+        <input id="lostLocation" class="w-full rounded-md p-2 text-sm"
+               placeholder="Library, Canteen, Lab 302"
+               style="background:#1A1A1A;color:#F5F5F5;border:1px solid #262626;">
+      </div>
+
+      <div>
+        <label class="block text-sm mb-1" style="color:#CCC;">Category</label>
+        <input id="lostCategory" class="w-full rounded-md p-2 text-sm"
+               placeholder="Phone, Bag, ID Card..."
+               style="background:#1A1A1A;color:#F5F5F5;border:1px solid #262626;">
+      </div>
+
+      <div>
+        <label class="block text-sm mb-1" style="color:#CCC;">Description</label>
+        <textarea id="lostDesc" rows="3" class="w-full rounded-md p-2 text-sm"
+                  placeholder="Color, marks, brand…"
+                  style="background:#1A1A1A;color:#F5F5F5;border:1px solid #262626;"></textarea>
+      </div>
+
+      <button type="submit"
+              class="w-full flex items-center justify-center p-2 text-white font-semibold rounded-md transition-colors"
+              style="background:#FFA500;">
+        Report Lost Item
+      </button>
+    </form>
+  </section>
+
+  <!-- Lost List -->
+  <section class="p-6 rounded-lg" style="background-color:#262626;">
+    <h3 class="text-2xl font-bold mb-6" style="color:#F5F5F5;">Lost Board</h3>
+
+    <div class="flex gap-2 mb-4">
+      <input id="lostSearch" placeholder="Search lost items"
+             class="flex-1 rounded-md p-2 text-sm"
+             style="background:#1A1A1A;color:#F5F5F5;border:1px solid #262626;">
+      <button onclick="loadLost()"
+              class="px-4 rounded-md text-sm font-semibold"
+              style="background:#FFA500;color:#111;">Search</button>
+    </div>
+
+    <div id="lostList" class="space-y-3"></div>
+  </section>
+</main>
+
+<!-- FOOTER -->
+<footer style="background:#121212;color:#CCC" class="py-6 text-center mt-auto">
+  © 2026 Found-Hub. All rights reserved. Your College Campus Buddy.
+</footer>
+
+<script>
+const API = "http://127.0.0.1:4000";
+
+function token(){ return localStorage.getItem('fh_token'); }
+function authHeader(){ return { 'Authorization':'Bearer '+token() }; }
+
+// POST LOST ITEM
+async function postLost(e){
+  e.preventDefault();
+
+  if(!token()){
+    alert("Please login first.");
+    location.href="login-signup.html";
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append("type", "lost");
+  fd.append("title", lostTitle.value.trim());
+  fd.append("location", lostLocation.value.trim());
+  fd.append("category", lostCategory.value.trim());
+  fd.append("description", lostDesc.value.trim());
+
+  const r = await fetch(`${API}/api/items`, {
+    method:"POST",
+    headers: authHeader(),
+    body: fd
+  });
+
+  const res = await r.json();
+  if(res.error) return alert(res.error);
+
+  alert("Lost item posted!");
+  lostForm.reset();
+  loadLost();
+}
+
+// LOAD LOST ITEMS
+async function loadLost(){
+  const q = lostSearch.value.trim();
+  const url = new URL(`${API}/api/items`);
+  url.searchParams.set("type","lost");
+  if(q) url.searchParams.set("q", q);
+
+  const r = await fetch(url);
+  const items = await r.json();
+
+  lostList.innerHTML = items.length
+    ? items.map(i => `
+      <div class="rounded-md p-3" style="background:#1A1A1A;border:1px solid #333;">
+        <div class="font-semibold" style="color:#F5F5F5">${i.title}</div>
+        <div style="color:#AAA" class="text-sm">${i.location || ""}</div>
+        <div class="text-sm mt-1" style="color:#CFCFCF">${i.description || ""}</div>
+      </div>
+    `).join("")
+    : `<p style="color:#AAA">No lost items reported yet.</p>`;
+}
+
+loadLost();
+</script>
+
+</body>
+</html>

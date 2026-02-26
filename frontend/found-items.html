@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" class="font-sans">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Found-Hub - Found Items</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-[#1A1A1A] flex flex-col min-h-screen">
+
+<!-- NAV -->
+<header class="bg-[#121212] text-white py-4 px-6">
+  <div class="container mx-auto flex justify-between items-center">
+    <a href="index.html" class="text-2xl font-bold">Found-Hub</a>
+    <nav class="hidden md:flex space-x-6 text-sm">
+      <a href="index.html" class="text-gray-300 hover:text-white">Home</a>
+      <a href="about.html" class="text-gray-300 hover:text-white">About Me</a>
+      <a href="lost-items.html" class="text-gray-300 hover:text-white">Lost Items</a>
+      <a href="found-items.html" class="text-white font-semibold">Found Items</a>
+      <a href="login-signup.html" class="text-gray-300 hover:text-white">Login/Sign-Up</a>
+      <a href="dashboard.html" class="text-gray-300 hover:text-white">Dashboard</a>
+    </nav>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="text-center flex flex-col items-center justify-center min-h-[45vh] p-8 bg-gradient-to-b from-black to-[#1A1A1A]">
+  <h2 class="text-4xl md:text-6xl font-bold text-yellow-400">Found Items Board</h2>
+  <p class="mt-4 text-lg text-orange-400 max-w-2xl">
+    Help others find their lost belongings by claiming responsibly.
+  </p>
+</section>
+
+<!-- MAIN -->
+<main class="container mx-auto py-10 px-6 grid md:grid-cols-2 gap-6 flex-1">
+
+<!-- POST FORM -->
+<section class="bg-[#262626] p-6 rounded-lg">
+  <h3 class="text-2xl font-bold mb-6 text-white">Post a Found Item</h3>
+
+  <form id="foundForm" class="space-y-4">
+    <input name="title" placeholder="Item Title" required
+      class="w-full p-2 rounded bg-[#1A1A1A] border border-[#333] text-white">
+
+    <input name="location" placeholder="Location"
+      class="w-full p-2 rounded bg-[#1A1A1A] border border-[#333] text-white">
+
+    <input name="category" placeholder="Category"
+      class="w-full p-2 rounded bg-[#1A1A1A] border border-[#333] text-white">
+
+    <textarea name="description" rows="3" placeholder="Description"
+      class="w-full p-2 rounded bg-[#1A1A1A] border border-[#333] text-white"></textarea>
+
+    <input type="file" name="photo" accept="image/*" class="text-white text-sm">
+
+    <button type="submit"
+      class="w-full p-2 bg-orange-500 text-white font-semibold rounded">
+      Post Found Item
+    </button>
+  </form>
+</section>
+
+<!-- LIST -->
+<section class="bg-[#262626] p-6 rounded-lg">
+  <h3 class="text-2xl font-bold mb-6 text-white">Available Found Items</h3>
+
+  <div id="foundList" class="space-y-4"></div>
+</section>
+
+</main>
+
+<footer class="bg-[#121212] text-gray-400 text-center py-4 text-sm">
+ © 2026 Found-Hub. All rights reserved. Your College Campus Buddy.
+</footer>
+
+<script>
+const API = "http://localhost:4000";
+
+function token() { return localStorage.getItem('fh_token'); }
+function authHeader() { return { 'Authorization': 'Bearer ' + token() }; }
+
+/* ===========================
+   LOAD FOUND ITEMS
+=========================== */
+async function loadFound() {
+  const r = await fetch(`${API}/api/items?type=found`);
+  const items = await r.json();
+  const wrap = document.getElementById('foundList');
+
+  if (!items.length) {
+    wrap.innerHTML = "<p class='text-gray-400'>No items found.</p>";
+    return;
+  }
+
+  wrap.innerHTML = items.map(i => `
+    <div class="bg-[#1A1A1A] border border-[#333] rounded p-4">
+      <div class="flex justify-between items-start">
+        <div>
+          <div class="font-semibold text-white">${i.title}</div>
+          <div class="text-xs text-gray-400">${i.location || ''}</div>
+        </div>
+        ${i.photo_url ? `<img src="${API + i.photo_url}" class="w-16 h-16 object-cover rounded">` : ''}
+      </div>
+
+      ${i.description ? `<div class="mt-2 text-sm text-gray-300">${i.description}</div>` : ''}
+
+      ${i.status === 'claimed'
+        ? `<div class="mt-3 text-xs text-green-400 font-semibold">Item already claimed</div>`
+        : `
+          <div class="mt-3">
+            <button onclick="claim(${i.id}, ${i.owner_id})"
+              class="px-3 py-1 bg-orange-500 text-white text-sm rounded">
+              Claim
+            </button>
+          </div>
+        `
+      }
+    </div>
+  `).join('');
+}
+
+/* ===========================
+   POST FOUND ITEM
+=========================== */
+document.getElementById("foundForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  if (!token()) {
+    alert("Please login first.");
+    return;
+  }
+
+  const fd = new FormData(e.target);
+  fd.append("type", "found");
+
+  const r = await fetch(`${API}/api/items`, {
+    method: "POST",
+    headers: authHeader(),
+    body: fd
+  });
+
+  const res = await r.json();
+  if (res.error) return alert(res.error);
+
+  e.target.reset();
+  loadFound();
+});
+
+/* ===========================
+   CLAIM ITEM
+=========================== */
+async function claim(itemId, ownerId) {
+
+  if (!token()) {
+    alert("Please login first.");
+    return;
+  }
+
+  const user = JSON.parse(localStorage.getItem("fh_user"));
+
+  if (user.id === ownerId) {
+    alert("You cannot claim your own post.");
+    return;
+  }
+
+  const message = prompt("Enter proof that this item belongs to you:");
+
+  if (!message || message.trim() === "") {
+    alert("Proof message is required.");
+    return;
+  }
+
+  const r = await fetch(`${API}/api/items/${itemId}/claims`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader()
+    },
+    body: JSON.stringify({ message })
+  });
+
+  const res = await r.json();
+
+  if (res.error) {
+    alert(res.error);
+  } else {
+    alert("Your claim has been submitted to the owner.");
+  }
+}
+
+loadFound();
+</script>
+
+</body>
+</html>
